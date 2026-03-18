@@ -1,7 +1,5 @@
 import { z } from "zod"
 
-export const config = { runtime: "edge" }
-
 // ─── Input schema ────────────────────────────────────────────────────────────
 
 const BrandInputSchema = z.object({
