@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design System Generator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Inter, -apple-system, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 16px; }
+  h1 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+  .field { margin-bottom: 12px; }
+  label { display: block; font-size: 11px; color: #666; margin-bottom: 4px; }
+  input, select { width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
+  input:focus, select:focus { border-color: #0066ff; }
+  .color-row { display: flex; gap: 8px; align-items: center; }
+  .color-row input[type=color] { width: 36px; height: 32px; padding: 2px; cursor: pointer; flex-shrink: 0; }
+  .color-row input[type=text] { flex: 1; }
+  button#generate-btn {
+    width: 100%; padding: 10px; background: #111; color: #fff;
+    border: none; border-radius: 6px; font-size: 13px; font-weight: 500;
+    cursor: pointer; margin-top: 4px; transition: opacity 0.15s;
+  }
+  button#generate-btn:hover { opacity: 0.85; }
+  .status { margin-top: 12px; font-size: 12px; padding: 8px 10px; border-radius: 6px; display: none; }
+  .status--loading { display: block; background: #f0f4ff; color: #0044cc; }
+  .status--error   { display: block; background: #fff0f0; color: #cc0000; }
+  .status--success { display: block; background: #f0fff4; color: #007700; }
+  .spec-preview { margin-top: 12px; border: 1px solid #eee; border-radius: 6px; padding: 10px; display: none; }
+  .spec-preview:not(:empty) { display: block; }
+  .spec-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid #f0f0f0; }
+  .spec-row:last-child { border-bottom: none; }
+  .spec-row span { color: #666; }
+  .spec-row strong { color: #111; }
+  .colors { display: flex; gap: 6px; padding: 6px 0; }
+  .swatch { width: 24px; height: 24px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.08); }
+  .divider { border: none; border-top: 1px solid #f0f0f0; margin: 14px 0; }
+</style>
+</head>
+<body>
+  <h1>Design System Generator</h1>
+
+  <div class="field">
+    <label>Brand name *</label>
+    <input id="brand-name" type="text" placeholder="e.g. Acme" />
+  </div>
+
+  <div class="field">
+    <label>Industry *</label>
+    <input id="industry" type="text" placeholder="e.g. fintech, healthcare, SaaS" />
+  </div>
+
+  <div class="field">
+    <label>Product type *</label>
+    <input id="product-type" type="text" placeholder="e.g. dashboard, mobile app, e-commerce" />
+  </div>
+
+  <hr class="divider">
+
+  <div class="field">
+    <label>Primary color (optional)</label>
+    <div class="color-row">
+      <input type="color" id="primary-color-picker" value="#0066ff" />
+      <input type="text" id="primary-color" placeholder="#0066ff" maxlength="7" />
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Tone (optional)</label>
+    <select id="tone">
+      <option value="">Auto (from reasoning engine)</option>
+      <option value="minimal">Minimal</option>
+      <option value="bold">Bold</option>
+      <option value="luxury">Luxury</option>
+      <option value="playful">Playful</option>
+      <option value="corporate">Corporate</option>
+    </select>
+  </div>
+
+  <button id="generate-btn">Generate design system</button>
+
+  <div id="status" class="status"></div>
+  <div id="spec-preview" class="spec-preview"></div>
+
+  <script src="ui.js"></script>
+  <script>
+    // Sync color picker ↔ text input
+    const picker = document.getElementById("primary-color-picker")
+    const text = document.getElementById("primary-color")
+    picker.addEventListener("input", () => { text.value = picker.value })
+    text.addEventListener("input", () => {
+      if (/^#[0-9A-Fa-f]{6}$/.test(text.value)) picker.value = text.value
+    })
+  </script>
+<script>(() => {
+  var __async = (__this, __arguments, generator) => {
+    return new Promise((resolve, reject) => {
+      var fulfilled = (value) => {
+        try {
+          step(generator.next(value));
+        } catch (e) {
+          reject(e);
+        }
+      };
+      var rejected = (value) => {
+        try {
+          step(generator.throw(value));
+        } catch (e) {
+          reject(e);
+        }
+      };
+      var step = (x) => x.done ? resolve(x.value) : Promise.resolve(x.value).then(fulfilled, rejected);
+      step((generator = generator.apply(__this, __arguments)).next());
+    });
+  };
+
+  // src/config.ts
+  var BACKEND_URL = "https://figma-design-system-plugin.onrender.com";
+  var KEEPALIVE_INTERVAL = 10 * 60 * 1e3;
+
+  // src/ui.ts
+  function startKeepAlive() {
+    const ping = () => {
+      fetch(`${BACKEND_URL.replace("/api/generate", "")}/health`).catch(() => {
+      });
+    };
+    ping();
+    setInterval(ping, KEEPALIVE_INTERVAL);
+  }
+  function generate(brand) {
+    return __async(this, null, function* () {
+      var _a;
+      setStatus("loading", "Analyzing brand with reasoning engine...");
+      try {
+        const res = yield fetch(`${BACKEND_URL}/api/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(brand)
+        });
+        if (!res.ok) {
+          const err = yield res.json();
+          throw new Error((_a = err.error) != null ? _a : "Backend error");
+        }
+        const { operations, spec } = yield res.json();
+        setStatus("loading", `Building design system \u2014 ${operations.length} operations...`);
+        showSpec(spec);
+        parent.postMessage(
+          { pluginMessage: { type: "EXECUTE", operations } },
+          "*"
+        );
+      } catch (err) {
+        setStatus("error", err.message);
+      }
+    });
+  }
+  function setStatus(type, message) {
+    const el = document.getElementById("status");
+    if (!el) return;
+    el.textContent = message;
+    el.className = `status status--${type}`;
+  }
+  function showSpec(spec) {
+    var _a, _b, _c, _d, _e, _f;
+    const el = document.getElementById("spec-preview");
+    if (!el) return;
+    el.innerHTML = `
+    <div class="spec-row"><span>Style</span><strong>${(_a = spec.style) != null ? _a : "\u2014"}</strong></div>
+    <div class="spec-row"><span>Heading font</span><strong>${(_c = (_b = spec.typography) == null ? void 0 : _b.heading) != null ? _c : "\u2014"}</strong></div>
+    <div class="spec-row"><span>Body font</span><strong>${(_e = (_d = spec.typography) == null ? void 0 : _d.body) != null ? _e : "\u2014"}</strong></div>
+    <div class="spec-row colors">
+      ${Object.entries((_f = spec.colors) != null ? _f : {}).map(
+      ([k, v]) => `<span class="swatch" style="background:${v}" title="${k}: ${v}"></span>`
+    ).join("")}
+    </div>
+  `;
+  }
+  window.onload = () => {
+    var _a;
+    startKeepAlive();
+    (_a = document.getElementById("generate-btn")) == null ? void 0 : _a.addEventListener("click", () => {
+      var _a2, _b, _c, _d, _e;
+      const name = (_a2 = document.getElementById("brand-name")) == null ? void 0 : _a2.value.trim();
+      const industry = (_b = document.getElementById("industry")) == null ? void 0 : _b.value.trim();
+      const productType = (_c = document.getElementById("product-type")) == null ? void 0 : _c.value.trim();
+      const primaryColor = ((_d = document.getElementById("primary-color")) == null ? void 0 : _d.value) || void 0;
+      const tone = (_e = document.getElementById("tone")) == null ? void 0 : _e.value;
+      if (!name || !industry || !productType) {
+        setStatus("error", "Fill in all required fields");
+        return;
+      }
+      generate({ name, industry, productType, primaryColor, tone });
+    });
+    window.addEventListener("message", (event) => {
+      var _a2;
+      const msg = (_a2 = event.data) == null ? void 0 : _a2.pluginMessage;
+      if ((msg == null ? void 0 : msg.type) === "DONE") {
+        setStatus("success", `Done \u2014 ${msg.count} nodes created`);
+      }
+      if ((msg == null ? void 0 : msg.type) === "ERROR") {
+        setStatus("error", msg.message);
+      }
+    });
+  };
+})();
+</script></body>
+</html>

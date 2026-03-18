@@ -8,31 +8,44 @@ interface BrandInput {
   tone?: "minimal" | "bold" | "luxury" | "playful" | "corporate"
 }
 
-// ─── Keep-alive ping (prevents Render cold starts) ────────────────────────────
+// ─── Keep-alive ping ──────────────────────────────────────────────────────────
 
 function startKeepAlive() {
   const ping = () => {
-    fetch(`${BACKEND_URL.replace("/api/generate", "")}/health`).catch(() => {})
+    fetch(`${BACKEND_URL}/health`).catch(() => {})
   }
   ping()
   setInterval(ping, KEEPALIVE_INTERVAL)
 }
 
-// ─── Generate design system ───────────────────────────────────────────────────
+// ─── Generate ─────────────────────────────────────────────────────────────────
 
 async function generate(brand: BrandInput): Promise<void> {
-  setStatus("loading", "Analyzing brand with reasoning engine...")
+  setStatus("loading", "Waking up reasoning engine...")
+
+  // First ping health to wake up Render
+  try {
+    await fetch(`${BACKEND_URL}/health`)
+  } catch (_) {}
+
+  setStatus("loading", "Analyzing brand with UI UX Pro Max...")
 
   try {
-    const res = await fetch(`${BACKEND_URL}/api/generate`, {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 90000) // 90s timeout
+
+    const res = await fetch(`${BACKEND_URL}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(brand),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
 
     if (!res.ok) {
       const err = await res.json()
-      throw new Error(err.error ?? "Backend error")
+      throw new Error(err.detail ?? "Backend error")
     }
 
     const { operations, spec } = await res.json()
@@ -40,13 +53,16 @@ async function generate(brand: BrandInput): Promise<void> {
     setStatus("loading", `Building design system — ${operations.length} operations...`)
     showSpec(spec)
 
-    // Send operations to sandbox for execution
     parent.postMessage(
       { pluginMessage: { type: "EXECUTE", operations } },
       "*"
     )
   } catch (err: any) {
-    setStatus("error", err.message)
+    if (err.name === "AbortError") {
+      setStatus("error", "Timeout — service is starting up, retry in 30 seconds")
+    } else {
+      setStatus("error", err.message)
+    }
   }
 }
 
@@ -94,11 +110,10 @@ window.onload = () => {
     generate({ name, industry, productType, primaryColor, tone })
   })
 
-  // Listen for completion message from sandbox
   window.addEventListener("message", (event) => {
     const msg = event.data?.pluginMessage
     if (msg?.type === "DONE") {
-      setStatus("success", `Done — ${msg.count} nodes created`)
+      setStatus("success", `Done — ${msg.count} elements created in Figma`)
     }
     if (msg?.type === "ERROR") {
       setStatus("error", msg.message)
