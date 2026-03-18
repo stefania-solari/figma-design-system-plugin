@@ -120,7 +120,7 @@
   // src/ui.ts
   function startKeepAlive() {
     const ping = () => {
-      fetch(`${BACKEND_URL.replace("/api/generate", "")}/health`).catch(() => {
+      fetch(`${BACKEND_URL}/health`).catch(() => {
       });
     };
     ping();
@@ -129,16 +129,25 @@
   function generate(brand) {
     return __async(this, null, function* () {
       var _a;
-      setStatus("loading", "Analyzing brand with reasoning engine...");
+      setStatus("loading", "Waking up reasoning engine...");
       try {
-        const res = yield fetch(`${BACKEND_URL}/api/generate`, {
+        yield fetch(`${BACKEND_URL}/health`);
+      } catch (_) {
+      }
+      setStatus("loading", "Analyzing brand with UI UX Pro Max...");
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 9e4);
+        const res = yield fetch(`${BACKEND_URL}/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(brand)
+          body: JSON.stringify(brand),
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
         if (!res.ok) {
           const err = yield res.json();
-          throw new Error((_a = err.error) != null ? _a : "Backend error");
+          throw new Error((_a = err.detail) != null ? _a : "Backend error");
         }
         const { operations, spec } = yield res.json();
         setStatus("loading", `Building design system \u2014 ${operations.length} operations...`);
@@ -148,7 +157,11 @@
           "*"
         );
       } catch (err) {
-        setStatus("error", err.message);
+        if (err.name === "AbortError") {
+          setStatus("error", "Timeout \u2014 service is starting up, retry in 30 seconds");
+        } else {
+          setStatus("error", err.message);
+        }
       }
     });
   }
@@ -193,7 +206,7 @@
       var _a2;
       const msg = (_a2 = event.data) == null ? void 0 : _a2.pluginMessage;
       if ((msg == null ? void 0 : msg.type) === "DONE") {
-        setStatus("success", `Done \u2014 ${msg.count} nodes created`);
+        setStatus("success", `Done \u2014 ${msg.count} elements created in Figma`);
       }
       if ((msg == null ? void 0 : msg.type) === "ERROR") {
         setStatus("error", msg.message);
