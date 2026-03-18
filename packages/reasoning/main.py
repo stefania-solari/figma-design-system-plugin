@@ -39,6 +39,71 @@ async def clone_skill():
         logger.info("Skill already present, skipping clone")
 
 
+def parse_ascii_output(raw: str) -> dict:
+    """Parse the ASCII table output from search.py into a structured dict."""
+    result = {
+        "style": None,
+        "pattern": None,
+        "colors": {},
+        "typography": {},
+        "effects": [],
+        "antiPatterns": [],
+        "checklist": [],
+        "raw": raw
+    }
+
+    lines = raw.splitlines()
+    section = None
+
+    for line in lines:
+        line = line.strip().strip("|").strip()
+        if not line or line.startswith("+") or line.startswith("=") or line.startswith("TARGET"):
+            continue
+
+        # Detect sections
+        if "STYLE:" in line:
+            section = "style"
+            val = line.split("STYLE:")[-1].strip()
+            if val:
+                result["style"] = val
+        elif "PATTERN:" in line:
+            section = "pattern"
+            val = line.split("PATTERN:")[-1].strip()
+            if val:
+                result["pattern"] = val
+        elif "COLORS:" in line:
+            section = "colors"
+        elif "TYPOGRAPHY:" in line:
+            section = "typography"
+        elif "KEY EFFECTS:" in line:
+            section = "effects"
+        elif "AVOID" in line or "Anti-pattern" in line.lower():
+            section = "antiPatterns"
+        elif "CHECKLIST" in line:
+            section = "checklist"
+        elif section == "colors":
+            for key in ["Primary", "Secondary", "CTA", "Background", "Text"]:
+                if line.startswith(key + ":"):
+                    val = line.split(":", 1)[-1].strip().split()[0]
+                    result["colors"][key.lower()] = val
+            # heading/body font inside typography block
+        elif section == "typography":
+            if ":" in line:
+                parts = line.split(":", 1)
+                k = parts[0].strip().lower()
+                v = parts[1].strip()
+                if k in ("heading", "body", "mood", "best for"):
+                    result["typography"][k] = v
+        elif section == "effects" and line:
+            result["effects"] = [e.strip() for e in line.split("+") if e.strip()]
+        elif section == "antiPatterns" and line and not line.startswith("["):
+            result["antiPatterns"] = [a.strip() for a in line.split("+") if a.strip()]
+        elif section == "checklist" and line.startswith("["):
+            result["checklist"].append(line.lstrip("[ ] ").strip())
+
+    return result
+
+
 @app.post("/reason")
 def run_reasoning(req: ReasoningRequest):
     if not os.path.exists(SKILL_PATH):
@@ -50,7 +115,7 @@ def run_reasoning(req: ReasoningRequest):
         logger.info(f"Running reasoning for: {req.query} / {req.project_name}")
         result = subprocess.run(
             [sys.executable, SKILL_PATH, req.query,
-             "--design-system", "-p", req.project_name, "-f", "json"],
+             "--design-system", "--project-name", req.project_name],
             capture_output=True,
             text=True,
             timeout=30,
@@ -61,11 +126,9 @@ def run_reasoning(req: ReasoningRequest):
             raise HTTPException(status_code=500, detail=result.stderr)
 
         raw = result.stdout.strip()
-        return json.loads(raw)
+        logger.info(f"Raw output (first 300 chars): {raw[:300]}")
+        return parse_ascii_output(raw)
 
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parse error: {e} — stdout: {result.stdout[:500]}")
-        raise HTTPException(status_code=500, detail="Skill output is not valid JSON")
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=504, detail="Skill timed out")
     except Exception as e:
