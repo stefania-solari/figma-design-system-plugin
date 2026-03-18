@@ -1,0 +1,17 @@
+{
+  "name": "ds-plugin-figma",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm run build:sandbox && npm run build:ui",
+    "build:sandbox": "esbuild src/sandbox.ts --bundle --outfile=dist/sandbox.js --target=es6",
+    "build:ui": "esbuild src/ui.ts --bundle --outfile=dist/ui.js --target=es6 && node scripts/bundle-ui.js",
+    "watch": "concurrently \"npm run build:sandbox -- --watch\" \"npm run build:ui -- --watch\""
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.0",
+    "concurrently": "^8.2.0",
+    "@figma/plugin-typings": "^1.94.0",
+    "typescript": "^5.4.0"
+  }
+}
