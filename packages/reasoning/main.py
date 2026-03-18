@@ -132,7 +132,7 @@ Available operations:
 {{ "op": "createCoverPage", "systemName": string, "version": string, "palette": string[] }}
 
 Naming: "Category/Subcategory/Variant"
-Pages: Cover → Foundations → Tokens → Atoms → Molecules → Organisms → Changelog
+Pages: Cover -> Foundations -> Tokens -> Atoms -> Molecules -> Organisms -> Changelog
 Build a complete production-ready design system with all foundations, semantic tokens, and at least 6 atom components."""
 
 
@@ -164,6 +164,7 @@ async def generate_design_system(brand: BrandInput):
     if not os.path.exists(SKILL_PATH):
         raise HTTPException(status_code=503, detail="Skill not ready.")
 
+    # Step 1 — UI UX Pro Max reasoning
     try:
         reasoning_result = subprocess.run(
             [sys.executable, SKILL_PATH, f"{brand.industry} {brand.productType}",
@@ -175,11 +176,16 @@ async def generate_design_system(brand: BrandInput):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Reasoning failed: {str(e)}")
 
+    # Step 2 — Claude API
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
                 "https://api.anthropic.com/v1/messages",
-                headers={"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"},
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01"
+                },
                 json={
                     "model": "claude-sonnet-4-20250514",
                     "max_tokens": 4000,
@@ -187,11 +193,20 @@ async def generate_design_system(brand: BrandInput):
                     "messages": [{"role": "user", "content": f"Build the complete design system for \"{brand.name}\". Return ONLY the JSON array of operations."}]
                 }
             )
+
         claude_data = response.json()
+        logger.info(f"Claude response status: {response.status_code}")
+        logger.info(f"Claude response body: {json.dumps(claude_data)[:500]}")
+
+        if "error" in claude_data:
+            raise HTTPException(status_code=500, detail=f"Claude API error: {claude_data['error']}")
+
         raw_text = claude_data.get("content", [{}])[0].get("text", "")
+        logger.info(f"Raw text (first 200): {raw_text[:200]}")
         clean = raw_text.replace("```json", "").replace("```", "").strip()
         operations = json.loads(clean)
         logger.info(f"Claude returned {len(operations)} operations")
+
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"Claude output not valid JSON: {str(e)}")
     except Exception as e:
