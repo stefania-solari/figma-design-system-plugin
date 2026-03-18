@@ -1,5 +1,5 @@
-// Update this after deploying the backend to Vercel
-export const BACKEND_URL = "https://your-backend-xxxx.vercel.app"
+// Backend URL — Render.com microservice
+export const BACKEND_URL = "https://figma-design-system-plugin.onrender.com"
 
 // Keep-alive interval in ms (10 minutes)
 // Prevents Render free tier cold starts while the plugin is open
